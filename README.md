@@ -25,7 +25,7 @@ For training TEPCAM, run command below:
 python ./scripts/train.py --input_file="./Data/TEP-merge.csv" --model_name="TEPCAM" --epoch=30
 ```
 ## Model Evaluation
-Model evalutation using [test.py](test.py), run command below:
+Model evalutation using [test.py](./scripts/test.py), run command below:
 ```commandline
 python ./scripts/test.py --file_path="./Data/ImmuneCODE.csv" --model_path="./model/TEPCAM_test.pt" 
 --output_file="./output.csv" --metric_file="./metric_file.csv"
