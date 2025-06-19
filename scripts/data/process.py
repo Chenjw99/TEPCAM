@@ -21,7 +21,7 @@ class TEPDataset(Dataset):
     def __init__(self, sequence, labels, max_tcr_len=20, max_antigen_len=11,align=False):
         self.max_tcr_len = max_tcr_len
         self.max_antigen_len = max_antigen_len
-        self.data = self.__initilize_data(sequence, labels, align)
+        self.data = self._initilize_data(sequence, labels, align)
         
     def __getitem__(self, idx):
         return self.data[idx]
@@ -29,7 +29,7 @@ class TEPDataset(Dataset):
     def __len__(self):
         return len(self.data)
     
-    def __initilize_data(self, sequences, labels, align):
+    def _initilize_data(self, sequences, labels, align):
         data_list = []
         if align:
             #use ANARCI for alignment

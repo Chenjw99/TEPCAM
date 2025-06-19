@@ -28,7 +28,7 @@ def BLOSUM_embedding(filename):
     
     return embedding
 
-def get_numbering(seqs, ):
+def get_numbering(seqs):
     """
     get the IMGT numbering of CDR3 with ANARCI tool
     modified from https://github.com/pengxingang/TEIM/blob/main/scripts/data_process.py
@@ -47,7 +47,7 @@ def get_numbering(seqs, ):
             total_seq = ''.join([template[0], seq ,template[1]])
             f.write(str(total_seq))
             f.write('\n')
-    print('Save fasta file to '+save_path + '\n Aligning...')
+    print('Save fasta file to '+save_path + '\n Aligning...It would take a while~')
     df_seqs = pd.DataFrame(list(zip(id_list, seqs_uni)), columns=['Id', 'cdr3'])
     output_file = f"tmp_align{random_int}"
     cmd = f"ANARCI -i {save_path} -o {output_file} --csv -p 40" #please set Number of parallel processes (-p) that fit your device
@@ -75,33 +75,3 @@ def get_numbering(seqs, ):
     df = df_seqs.merge(df_al, how='inner', on='Id')
     df = df.set_index('cdr3')
     return df.loc[seqs, 'cdr3_align'].values
-
-
-#Mish - "Mish: A Self Regularized Non-Monotonic Neural Activation Function"
-#https://arxiv.org/abs/1908.08681v1
-#implemented for PyTorch / FastAI by lessw2020 
-#github: https://github.com/lessw2020/mish
-
-class Mish(nn.Module):
-    def __init__(self):
-        super().__init__()
-
-    def forward(self, x):
-        #inlining this saves 1 second per epoch (V100 GPU) vs having a temp x and then returning x(!)
-        return x *( torch.tanh(F.softplus(x)))
-
-#Swish activation function
-class Swish(nn.Module):
-    def __init__(
-        self,
-    ):
-        """
-        Init method.
-        """
-        super(Swish, self).__init__()
-
-    def forward(self, input):
-        """
-        Forward pass of the function.
-        """
-        return input * torch.sigmoid(input)

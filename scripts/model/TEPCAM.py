@@ -23,9 +23,8 @@ Default model parameters for TEPCAM are listed below:
     n_heads = 6
 '''
 
-max_len = 31 # max_len_tcr:20 + max_len_pep:11
-
-#embedding_matrix = BLOSUM_embedding("None")
+# max_len = 31 
+# max_len_tcr:20 + max_len_pep:11
 
 class LayerNorm(nn.Module):
     def __init__(self, hidden_size, variance_epsilon=1e-12):
@@ -41,7 +40,7 @@ class LayerNorm(nn.Module):
         return self.gamma * x + self.beta
 
 class PositionalEncoding(nn.Module):
-    def __init__(self, hidden_size, max_len, dropout_rate=0.1):
+    def __init__(self, hidden_size, max_len = 31, dropout_rate = 0.1):
         super(PositionalEncoding, self).__init__()
         self.dropout = nn.Dropout(dropout_rate)
         pe = torch.zeros(max_len, hidden_size)
@@ -58,10 +57,10 @@ class PositionalEncoding(nn.Module):
     
 class Embeddings(nn.Module):
     #Vanilla embedding + positional embedding :)
-    def __init__(self, vocab_size, hidden_size, max_len):
+    def __init__(self, vocab_size, hidden_size, max_len = 31):
         super(Embeddings, self).__init__()
         self.word_embeddings = nn.Embedding(vocab_size, hidden_size)
-        self.position_embeddings = PositionalEncoding(hidden_size, max_len, dropout_rate=0.1)
+        self.position_embeddings = PositionalEncoding(hidden_size, max_len = 31, dropout_rate=0.1)
     
     def forward(self, input_ids):
         words_embeddings = self.word_embeddings(input_ids)    
@@ -100,7 +99,7 @@ class ScaledDotProductAttention(nn.Module):
         return context, attn
 
 class MultiHeadAttention(nn.Module):
-    def __init__(self, d_model_1, d_model_2, n_heads,d_model):
+    def __init__(self, d_model_1, d_model_2, n_heads, d_model):
         super(MultiHeadAttention, self).__init__()
         self.d_model_1 = d_model_1
         self.d_model_2 = d_model_2
@@ -130,11 +129,11 @@ class MultiHeadAttention(nn.Module):
         return output, attn
 
 class CrossAttention(nn.Module):
-    def __init__(self, feature_size,n_heads,d_model):
+    def __init__(self, feature_size, n_heads, d_model):
         super(CrossAttention,self).__init__()
         self.feature_size = feature_size
         self.n_heads = n_heads
-        self.cross_attention = MultiHeadAttention(feature_size,feature_size,self.n_heads,d_model) #two inputs must keep same dimension 
+        self.cross_attention = MultiHeadAttention(feature_size, feature_size, self.n_heads, d_model) #two inputs must keep same dimension 
     def forward(self, input_1, input_2, attn_mask1, attn_mask2):
         cr_1_q, cr_1_k, cr_1_v = input_1, input_2, input_2 
         cr_2_q, cr_2_k, cr_2_v = input_2, input_1, input_1 
@@ -143,61 +142,67 @@ class CrossAttention(nn.Module):
         return cr_out_1, cr_out_2, attn1, attn2
 
 class TEPCAM(nn.Module):
-    def __init__(self,d_model,batch_size,modelseed,n_heads):
-        super(TEPCAM,self).__init__()
+    def __init__(self, d_model, modelseed, n_heads, max_len_tcr=20, max_len_pep=11):
+        super(TEPCAM, self).__init__()
         set_modelseed(modelseed)
         self.d_model = d_model
-        self.batch_size = batch_size
-        self.tcr_embedding = Embeddings(vocab_size = 26, hidden_size = self.d_model, max_len =20)
-        self.pep_embedding = Embeddings(vocab_size = 26, hidden_size = self.d_model, max_len =11)
+        self.tcr_embedding = Embeddings(vocab_size=26, hidden_size=self.d_model, max_len=max_len_tcr)
+        self.pep_embedding = Embeddings(vocab_size=26, hidden_size=self.d_model, max_len=max_len_pep)
         self.n_heads = n_heads
-        self.SALayer = MultiHeadAttention(self.d_model,self.d_model,self.n_heads//2,self.d_model)
-        self.CALayer = CrossAttention(self.d_model,self.n_heads,self.d_model)
+        self.SALayer = MultiHeadAttention(self.d_model, self.d_model, self.n_heads//2, self.d_model)
+        self.CALayer = CrossAttention(self.d_model, self.n_heads, self.d_model)
         self.conv_layer = nn.Sequential(
-            nn.Conv2d(in_channels=1,out_channels=4,kernel_size=3,padding=1),
+            nn.Conv2d(in_channels=1, out_channels=4, kernel_size=3, padding=1),
             nn.BatchNorm2d(4),
             nn.GELU(),
-            nn.Conv2d(in_channels=4,out_channels=d_model//2,kernel_size=3,padding=1),
+            nn.Conv2d(in_channels=4, out_channels=d_model//2, kernel_size=3, padding=1),
             nn.BatchNorm2d(d_model//2),
             nn.GELU(),
-            nn.Conv2d(d_model//2,d_model,3,padding=1),
+            nn.Conv2d(d_model//2, d_model, 3, padding=1),
             nn.BatchNorm2d(d_model),
             nn.GELU(),
-            )
-        self.FFN = nn.Sequential(nn.Linear(self.d_model*max_len*2,1024),
-                                 nn.BatchNorm1d(1024),
-                                 nn.GELU(),
-                                 nn.Dropout(p=0.5),
-                                 nn.Linear(1024,128),
-                                 nn.BatchNorm1d(128),
-                                 nn.GELU(),
-                                 nn.Dropout(p=0.25),
-                                 nn.Linear(128,16),
-                                 nn.BatchNorm1d(16),
-                                 nn.GELU(),
-                                 nn.Linear(16,2),
-                                 ) 
+        )
+        self.FFN = nn.Sequential(
+            nn.Linear(self.d_model * (max_len_tcr + max_len_pep) * 2, 1024),  
+            nn.BatchNorm1d(1024),
+            nn.GELU(),
+            nn.Dropout(p=0.5),
+            nn.Linear(1024, 128),
+            nn.BatchNorm1d(128),
+            nn.GELU(),
+            nn.Dropout(p=0.25),
+            nn.Linear(128, 16),
+            nn.BatchNorm1d(16),
+            nn.GELU(),
+            nn.Linear(16, 2),
+        )
 
-                
     def forward(self, tcr, peptide):
+        assert tcr.size(0) == peptide.size(0), "Make sure TCRs and Epitopes are paired correctly"
+        batch_size = tcr.size(0) 
+        
         pep_embed = self.pep_embedding(peptide)
         tcr_embed = self.tcr_embedding(tcr) 
-        tcr_attn_mask = get_attn_pad_mask(tcr,tcr) 
-        pep_attn_mask = get_attn_pad_mask(peptide,peptide) 
-        tcr2pep_mask = get_attn_pad_mask(tcr,peptide) 
-        pep2tcr_mask = get_attn_pad_mask(peptide,tcr)
-        tcr_sa,attn_tcr = self.SALayer(tcr_embed,tcr_embed,tcr_embed,tcr_attn_mask)
-        pep_sa,attn_pep = self.SALayer(pep_embed,pep_embed,pep_embed,pep_attn_mask)
-        CA1,CA2,attn_tcr_ca,attn_pep_ca = self.CALayer(tcr_sa,pep_sa,tcr2pep_mask,pep2tcr_mask)
+        tcr_attn_mask = get_attn_pad_mask(tcr, tcr) 
+        pep_attn_mask = get_attn_pad_mask(peptide, peptide) 
+        tcr2pep_mask = get_attn_pad_mask(tcr, peptide) 
+        pep2tcr_mask = get_attn_pad_mask(peptide, tcr)
+        
+        tcr_sa, attn_tcr = self.SALayer(tcr_embed, tcr_embed, tcr_embed, tcr_attn_mask)
+        pep_sa, attn_pep = self.SALayer(pep_embed, pep_embed, pep_embed, pep_attn_mask)
+        CA1, CA2, attn_tcr_ca, attn_pep_ca = self.CALayer(tcr_sa, pep_sa, tcr2pep_mask, pep2tcr_mask)
+        
         CA1_conv = self.conv_layer(CA1.unsqueeze(1))
-        CA1_conv = torch.mean(CA1_conv,dim=1,keepdim=False)
+        CA1_conv = torch.mean(CA1_conv, dim=1, keepdim=False)
         CA2_conv = self.conv_layer(CA2.unsqueeze(1))
-        CA2_conv = torch.mean(CA2_conv,dim=1,keepdim=False)
-        CA1_conv = CA1_conv.view(self.batch_size, -1)
-        CA2_conv = CA2_conv.view(self.batch_size, -1)
-        CA1 = CA1.view(self.batch_size,-1)
-        CA2 = CA2.view(self.batch_size,-1)
-        fusedoutput = torch.cat([CA1,CA1_conv,CA2_conv,CA2],dim=1)
+        CA2_conv = torch.mean(CA2_conv, dim=1, keepdim=False)
+        
+        CA1_conv = CA1_conv.view(batch_size, -1)
+        CA2_conv = CA2_conv.view(batch_size, -1)
+        CA1 = CA1.view(batch_size, -1)
+        CA2 = CA2.view(batch_size, -1)
+        
+        fusedoutput = torch.cat([CA1, CA1_conv, CA2_conv, CA2], dim=1)
         output = self.FFN(fusedoutput)
+        
         return attn_tcr, attn_pep, attn_tcr_ca, attn_pep_ca, fusedoutput, output
-
